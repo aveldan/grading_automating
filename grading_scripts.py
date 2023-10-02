@@ -2,10 +2,9 @@ import requests
 import os
 import filecmp
 from dotenv import load_dotenv
-
+import json
 
 # To do
-# -- compare the files and add the result in the dict student_scores dict at the end
 # -- If file struct is already created do not mess with it, maybe introduce a variable to keep note of it.
 
 load_dotenv()
@@ -15,7 +14,10 @@ header['Authorization'] = os.environ.get("authorization-key")
 
 
 max_scores = {
-    # insert maxscores for questions in each assignment.
+    "isItPossible": 15,
+    "amountPoliceGets": 15,
+    "Insert/Search": 20,
+    "Enque/Deque": 20
 }
 
 def get_studentIDs():
@@ -164,8 +166,27 @@ def compare(path, std_dict):
     # Now use this filecmp to create a csv file for same files or not
     return same_or_not
 
+def compare_files(student_name):
+
+    tmp_list = student_name.lower().split(' ')
+    filename = tmp_list[len(tmp_list)-1]
+    for i in range(0, len(tmp_list)-1):
+        filename += tmp_list[i]
+    
+    file1 = os.environ.get("working-dir")+filename+'/'+filename+".py"
+    file2 = os.environ.get("working-dir")+filename+'/'+filename+".txt"
+
+    return filecmp.cmp(file1, file2)
+
+
 if __name__ == "__main__":
 
     student_scores = grade()
-    for student in student_scores:
-        print(student)
+    for i in range(0,len(student_scores)):
+        student_scores[i]["same-files"] = compare_files(student_scores[i]["name"])
+    
+    path = os.environ.get("working-dir")
+    path = path[0:len(path)-12]
+    
+    with open(path+"scores.json", "w") as outfile:
+        json.dump(student_scores, outfile, indent=4)
