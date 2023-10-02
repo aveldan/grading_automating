@@ -1,16 +1,27 @@
 import requests
 import os
 import filecmp
+from dotenv import load_dotenv
 
-authorization_val = 'Secret auth key'
 
-def get_my_students(ass_num):
-    
-    students_info_url = "The url"
-    req_url = students_info_url + str(ass_num)
-    head_dict = {}
-    head_dict['Authorization'] = authorization_val
-    response = requests.get(url=req_url,headers=head_dict)
+# To do
+# -- compare the files and add the result in the dict student_scores dict at the end
+# -- If file struct is already created do not mess with it, maybe introduce a variable to keep note of it.
+
+load_dotenv()
+
+header = {}
+header['Authorization'] = os.environ.get("authorization-key")
+
+
+max_scores = {
+    # insert maxscores for questions in each assignment.
+}
+
+def get_studentIDs():
+
+    req_url = os.environ.get("student-list-url")+os.environ.get("assignment-num")
+    response = requests.get(url=req_url,headers=header)
 
     if response.status_code != 200:
         print("Not a 200 response")
@@ -19,11 +30,11 @@ def get_my_students(ass_num):
     
     return response.json()["data"]
 
-def get_the_latest_submission(std_id, ass_num):
-    submissions_list_url = "The url"+str(ass_num)+"conti url"+str(std_id)
-    head_dict = {}
-    head_dict['Authorization'] = authorization_val
-    response = requests.get(url=submissions_list_url, headers=head_dict)
+
+def get_studentScore(studentID, studentFullName):
+
+    req_url = os.environ.get("student-submissions-url")+str(studentID)
+    response = requests.get(url=req_url,headers=header)
 
     if response.status_code != 200:
         print("Not a 200 response")
@@ -34,60 +45,77 @@ def get_the_latest_submission(std_id, ass_num):
     submissions = sorted(submissions, key=lambda x: x['created_at'])
     latest_submission = submissions[len(submissions)-1]
 
-    return latest_submission
+    download_py_file(studentFullName, latest_submission["FilePath"])
+    
+    
+    req_url = os.environ.get("submission-url")+str(studentID)+'/'+str(latest_submission["Id"])
+    response = requests.get(url=req_url,headers=header)
 
-def download_py(std_id, path, filename, ass_num):
+    if response.status_code != 200:
+        print("Not a 200 response")
+        print(response)
+        return None
     
-    latest_submission = get_the_latest_submission(std_id, ass_num)
-    
-    file_download_url = "The url"+latest_submission["FilePath"]
-    head_dict = {}
-    head_dict['Authorization'] = authorization_val
-    response = requests.get(url=file_download_url, headers=head_dict)
+    scores = response.json()["data"]["reports"]
+    student_scores = []
+
+    for score in scores:
+        question_score = {}
+        question_score["name"] = score["name"]
+        question_score["num_cases"] = score["num_cases"]
+        question_score["num_passed"] = score["num_passed"]
+        question_score["num_failed"] = score["num_failed"]
+
+        
+        if score["num_cases"] != 0:
+            question_score["score"] = (max_scores[score["name"]]*score["num_passed"])/score["num_cases"]
+        else:
+            question_score["score"] = 0
+
+        student_scores.append(question_score)
+
+    return student_scores
+
+def download_py_file(studentFullName, filePath):
+
+    req_url = os.environ.get("download-url")+filePath
+    response = requests.get(url=req_url, headers=header)
     
     if response.status_code != 200:
         print("Not a 200 response")
         print(response)
         return None
 
-    flptr = open(path+filename+'/'+filename+".py", "w")
+    filename = ""
+    tmp_list = studentFullName.lower().split(' ')
+    filename += tmp_list[len(tmp_list)-1]
+    for i in range(0,len(tmp_list)-1):
+        filename += tmp_list[i]
+        
+    flptr = open(os.environ.get("working-dir")+filename+'/'+filename+".py", "w")
     flptr.write(response.text)
 
     flptr.close()
 
-    return latest_submission
+def grade():
+    create_file_struct(os.environ.get("working-dir"))
 
-def get_py_files(ass_num, path):
-    std_list = get_my_students(ass_num=ass_num)
+    students = get_studentIDs()
+    students_scores = []
+
+    for student in students:
+        tmp_dict = {}
+        tmp_dict["name"] = student["Fullname"]
+        tmp_dict["scores"] = get_studentScore(student["StudentId"], student["Fullname"])
+        students_scores.append(tmp_dict)
     
-    if std_list == None:
-        return
-    
-    std_dict = {}
-    for student in std_list:
-        tmp_string = ""
-        tmp_list = student["Fullname"].lower().split(' ')
-        tmp_string += tmp_list[len(tmp_list)-1]
-        for i in range(0,len(tmp_list)-1):
-            tmp_string += tmp_list[i]
-        std_dict[student["StudentId"]] = tmp_string
-
-    last_subs = {}
-    for key, elem in std_dict.items():
-        last = download_py(key,path,elem,ass_num)
-        if last == None:
-            return None
-        
-        last_subs[elem] = last
-
-    return last_subs    
-
+    return students_scores
 
 def change_filenames(path):
     name_dict = {}
     for filename in os.listdir(path):
         str = ""
-        cpy_filename = filename[0:len(filename)-4]
+        cpy_filename = filename[0:len(filename)-4] # Assuming txt file or pdf file
 
         i = 0
         while i<len(cpy_filename) and cpy_filename[i] != '_':
@@ -137,6 +165,7 @@ def compare(path, std_dict):
     return same_or_not
 
 if __name__ == "__main__":
-    #For testing
-    
-    create_file_struct("path/to/the/all/submission/files/")
+
+    student_scores = grade()
+    for student in student_scores:
+        print(student)
