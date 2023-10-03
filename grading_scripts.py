@@ -186,7 +186,8 @@ if __name__ == "__main__":
         student_scores[i]["same-files"] = compare_files(student_scores[i]["name"])
     
     path = os.environ.get("working-dir")
-    path = path[0:len(path)-12]
+    tmp_list = path.split('/')
+    path = path[0:len(path)-len(tmp_list[len(tmp_list)-2])-1]
     
     with open(path+"scores.json", "w") as outfile:
         json.dump(student_scores, outfile, indent=4)
